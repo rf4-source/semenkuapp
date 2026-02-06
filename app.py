@@ -11,17 +11,20 @@ from cryptography.fernet import Fernet
 from streamlit_cookies_manager import EncryptedCookieManager
 
 
-# ================= PAGE CONFIG (HARUS PALING ATAS, 1x SAJA) =================
+# ================= PAGE CONFIG (WAJIB PALING ATAS, 1x) =================
 st.set_page_config(
     page_title="MIS Historis Search",
     layout="wide"
 )
 
 
-# ================= CONFIG AUTH =================
+# ================= SECRETS =================
 APP_PASSWORD = st.secrets["APP_PASSWORD"]
 COOKIE_SECRET_KEY = st.secrets["COOKIE_SECRET_KEY"]
+PARQUET_KEY = st.secrets["PARQUET_KEY"]
 
+
+# ================= AUTH CONFIG =================
 MAX_ATTEMPTS = 5
 LOCK_DURATION = timedelta(hours=1)
 COOKIE_EXPIRE_HOURS = 1
@@ -38,40 +41,38 @@ if not cookies.ready():
 
 
 # ================= SESSION INIT =================
-if "attempts" not in st.session_state:
-    st.session_state.attempts = 0
-
-if "locked_until" not in st.session_state:
-    st.session_state.locked_until = None
+st.session_state.setdefault("attempts", 0)
+st.session_state.setdefault("locked_until", None)
 
 
-# ================= COOKIE EXPIRY CHECK =================
-expired = False
-if cookies.get("login_time"):
+# ================= COOKIE VALIDATION =================
+def is_authenticated() -> bool:
+    """
+    AUTH VALID ONLY IF:
+    - logged_in == "true"
+    - login_time exists
+    - not expired
+    """
+    flag = cookies.get("logged_in")
+    login_time = cookies.get("login_time")
+
+    if flag != "true" or not login_time:
+        return False
+
     try:
-        login_time = datetime.fromisoformat(cookies.get("login_time"))
-        if datetime.now() - login_time > timedelta(hours=COOKIE_EXPIRE_HOURS):
-            cookies.pop("logged_in", None)
-            cookies.pop("login_time", None)
-            cookies.save()
-            expired = True
+        login_dt = datetime.fromisoformat(login_time)
     except Exception:
-        cookies.pop("logged_in", None)
-        cookies.pop("login_time", None)
-        cookies.save()
-        expired = True
+        return False
 
+    if datetime.now() - login_dt > timedelta(hours=COOKIE_EXPIRE_HOURS):
+        return False
 
-# ================= LOGIN STATUS =================
-is_logged_in = cookies.get("logged_in") == "true"
+    return True
 
 
 # ================= LOGIN PAGE =================
-if not is_logged_in:
+if not is_authenticated():
     st.title("🔐 Login Akses MIS Historis")
-
-    if expired:
-        st.warning("⏰ Session login habis, silakan login ulang")
 
     now = datetime.now()
 
@@ -79,7 +80,6 @@ if not is_logged_in:
     if st.session_state.locked_until and now < st.session_state.locked_until:
         remaining = st.session_state.locked_until - now
         minutes = int(remaining.total_seconds() // 60) + 1
-
         st.error(
             f"🚫 Terlalu banyak percobaan gagal.\n\n"
             f"Tunggu **{minutes} menit** sebelum mencoba lagi."
@@ -121,7 +121,20 @@ if not is_logged_in:
                     f"Sisa percobaan: **{remaining} kali**"
                 )
 
-    st.stop()  # ⛔ STOP DI LOGIN PAGE
+    st.stop()  # ⛔ STOP TOTAL JIKA BELUM LOGIN
+
+
+# ================= LOGOUT (FIX TOTAL) =================
+st.sidebar.divider()
+if st.sidebar.button("🚪 Logout"):
+    cookies["logged_in"] = "false"   # 🔥 OVERRIDE, BUKAN POP
+    cookies.pop("login_time", None)
+    cookies.save()
+
+    st.session_state.clear()
+    st.cache_data.clear()
+
+    st.rerun()
 
 
 # ================= MAIN APP =================
@@ -150,17 +163,16 @@ COLUMNS_CORE = [
 ]
 
 
-# ================= LOAD DATA (CACHE + ENCRYPT) =================
+# ================= LOAD DATA (ENCRYPT + CACHE) =================
 @st.cache_data(show_spinner=True)
 def load_data(enc_mtime: float) -> pd.DataFrame:
-    key = st.secrets["PARQUET_KEY"].encode()
-    f = Fernet(key)
+    f = Fernet(PARQUET_KEY.encode())
 
     with open(ENC_PATH, "rb") as f_enc:
-        decrypted_bytes = f.decrypt(f_enc.read())
+        decrypted = f.decrypt(f_enc.read())
 
     df = pd.read_parquet(
-        io.BytesIO(decrypted_bytes),
+        io.BytesIO(decrypted),
         engine="pyarrow"
     )
     df["Doc Date"] = pd.to_datetime(df["Doc Date"], errors="coerce")
@@ -192,28 +204,12 @@ def build_search_mask(series: pd.Series, query: str) -> pd.Series:
 
 
 def build_fuzzy_mask(series: pd.Series, query: str, threshold: int) -> pd.Series:
-    series = series.astype(str)
-
-    def match(val: str) -> bool:
-        return fuzz.partial_ratio(query.lower(), val.lower()) >= threshold
-
-    return series.apply(match)
+    return series.astype(str).apply(
+        lambda v: fuzz.partial_ratio(query.lower(), v.lower()) >= threshold
+    )
 
 
-# ================= SIDEBAR =================
-st.sidebar.divider()
-if st.sidebar.button("🚪 Logout"):
-    with st.spinner("Logging out..."):
-        cookies.pop("logged_in", None)
-        cookies.pop("login_time", None)
-        cookies.save()
-
-        st.cache_data.clear()
-        st.session_state.clear()
-        time.sleep(0.2)
-
-    st.rerun()
-
+# ================= SIDEBAR FILTER =================
 st.sidebar.header("🔧 Filter")
 
 search_remark = st.sidebar.text_input("Remark")
@@ -315,4 +311,3 @@ if not filtered.empty:
 
     with c4:
         st.metric("Total Value", f"Rp {filtered['Price Total'].sum():,.0f}")
-
