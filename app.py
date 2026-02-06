@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from rapidfuzz import fuzz
 import os
+import io
 from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 
@@ -411,6 +412,7 @@ if not filtered.empty:
             "Total Value",
             f"Rp {filtered['Price Total'].sum():,.0f}"
         )
+
 
 
 
