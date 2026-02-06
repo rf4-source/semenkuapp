@@ -1,0 +1,6 @@
+streamlit
+pandas
+pyarrow
+cryptography
+rapidfuzz
+streamlit-cookies-manager
