@@ -9,12 +9,12 @@ from streamlit_cookies_manager import EncryptedCookieManager
 import time
 
 # ================= CONFIG =================
-APP_PASSWORD = "Palimanan2026!"
+APP_PASSWORD = st.secrets["APP_PASSWORD"]
+COOKIE_SECRET_KEY = st.secrets["COOKIE_SECRET_KEY"]
+
 MAX_ATTEMPTS = 5
 LOCK_DURATION = timedelta(hours=1)
 COOKIE_EXPIRE_HOURS = 1
-
-COOKIE_SECRET_KEY = "s1per-secget-k3y-123"   # JANGAN diganti setelah live
 
 # ================= COOKIE MANAGER =================
 cookies = EncryptedCookieManager(
@@ -44,7 +44,6 @@ if cookies.get("login_time"):
             cookies.save()
             expired = True
     except Exception:
-        # kalau format cookie rusak
         cookies.pop("logged_in", None)
         cookies.pop("login_time", None)
         cookies.save()
@@ -114,6 +113,8 @@ if not is_logged_in:
 
     st.stop()   # ⛔ STOP DI SINI SAJA (PENTING)
 
+# ================== END AUTH ==================
+# ⬇⬇⬇ KODE APP UTAMA KAMU DI BAWAH INI ⬇⬇⬇
 # ================== END AUTH ==================
 # ⬇⬇⬇ KODE APP UTAMA KAMU DITULIS DI BAWAH INI ⬇⬇⬇
 
@@ -410,5 +411,6 @@ if not filtered.empty:
             "Total Value",
             f"Rp {filtered['Price Total'].sum():,.0f}"
         )
+
 
 
