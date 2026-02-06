@@ -162,7 +162,10 @@ def load_data(enc_mtime):
     df["Doc Date"] = pd.to_datetime(df["Doc Date"], errors="coerce")
     return df
 
-df = load_data(os.path.getmtime(ENC_PATH))
+df = pd.read_parquet(
+    io.BytesIO(decrypted_bytes),
+    engine="pyarrow"
+)
 
 # ================= SEARCH HELPERS =================
 def build_search_mask(series: pd.Series, query: str) -> pd.Series:
@@ -411,6 +414,7 @@ if not filtered.empty:
             "Total Value",
             f"Rp {filtered['Price Total'].sum():,.0f}"
         )
+
 
 
 
