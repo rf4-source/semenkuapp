@@ -203,9 +203,15 @@ def build_fuzzy_mask(series: pd.Series, query: str, threshold: int) -> pd.Series
 # ================= SIDEBAR =================
 st.sidebar.divider()
 if st.sidebar.button("🚪 Logout"):
-    cookies.pop("logged_in", None)
-    cookies.pop("login_time", None)
-    cookies.save()
+    with st.spinner("Logging out..."):
+        cookies.pop("logged_in", None)
+        cookies.pop("login_time", None)
+        cookies.save()
+
+        st.cache_data.clear()
+        st.session_state.clear()
+        time.sleep(0.2)
+
     st.rerun()
 
 st.sidebar.header("🔧 Filter")
@@ -309,3 +315,4 @@ if not filtered.empty:
 
     with c4:
         st.metric("Total Value", f"Rp {filtered['Price Total'].sum():,.0f}")
+
