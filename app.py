@@ -3,6 +3,7 @@ import pandas as pd
 from rapidfuzz import fuzz
 import os
 from datetime import datetime, timedelta
+from cryptography.fernet import Fernet
 
 from streamlit_cookies_manager import EncryptedCookieManager
 import time
@@ -119,8 +120,9 @@ if not is_logged_in:
 
 
 # ================= CONFIG =================
+# ================= CONFIG =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PARQUET_PATH = os.path.join(BASE_DIR, "mis_list.parquet")
+ENC_PATH = os.path.join(BASE_DIR, "mis_list.enc")
 
 COLUMNS_CORE = [
     "Doc Number",
@@ -143,17 +145,23 @@ st.set_page_config(
     page_title="MIS Historis Search",
     layout="wide"
 )
-st.title("🔎MIS Historis – Bill of Material")
-st.caption("Sumber data: mis_list.parquet")
+st.title("🔎 MIS Historis – Bill of Material")
+st.caption("Sumber data: encrypted dataset")
 
-# ================= LOAD DATA (FAST) =================
+# ================= LOAD DATA (FAST + AMAN) =================
 @st.cache_data(show_spinner=True)
-def load_data(parquet_mtime):
-    df = pd.read_parquet(PARQUET_PATH)
+def load_data(enc_mtime):
+    key = st.secrets["PARQUET_KEY"].encode()
+    f = Fernet(key)
+
+    with open(ENC_PATH, "rb") as f_enc:
+        decrypted_bytes = f.decrypt(f_enc.read())
+
+    df = pd.read_parquet(io.BytesIO(decrypted_bytes))
     df["Doc Date"] = pd.to_datetime(df["Doc Date"], errors="coerce")
     return df
 
-df = load_data(os.path.getmtime(PARQUET_PATH))
+df = load_data(os.path.getmtime(ENC_PATH))
 
 # ================= SEARCH HELPERS =================
 def build_search_mask(series: pd.Series, query: str) -> pd.Series:
@@ -402,4 +410,5 @@ if not filtered.empty:
             "Total Value",
             f"Rp {filtered['Price Total'].sum():,.0f}"
         )
+
 
